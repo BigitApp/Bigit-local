@@ -1,17 +1,12 @@
 import logging
 import os
 from fastapi import HTTPException, status
-
-from llama_index import (
-    StorageContext,
-    load_index_from_storage,
-    ServiceContext,
-)
-
+from llama_index.legacy.readers import SimpleDirectoryReader
+from llama_index.core.indices.vector_store import VectorStoreIndex
 from app.constants import DATASOURCES_CACHE_DIR
 
 
-def get_index(service_context: ServiceContext, datasource: str):
+def get_index(datasource: str):
     logger = logging.getLogger("uvicorn")
     ds_storage_dir = DATASOURCES_CACHE_DIR + "/" + datasource
     # check if storage already exists
@@ -23,9 +18,11 @@ def get_index(service_context: ServiceContext, datasource: str):
     else:
         # load the existing index
         logger.info(f"Loading index from {ds_storage_dir}...")
-        storage_context = StorageContext.from_defaults(persist_dir=ds_storage_dir)
-        index = load_index_from_storage(
-            storage_context, service_context=service_context
-        )
+        documents = SimpleDirectoryReader(ds_storage_dir).load_data()
+        vector_index = VectorStoreIndex.from_documents(documents)
+        # storage_context = StorageContext.from_defaults(persist_dir=ds_storage_dir)
+        # index = load_index_from_storage(
+        #     storage_context, service_context=service_context
+        # )
         logger.info(f"Finished loading index from {ds_storage_dir}")
-    return index
+    return vector_index

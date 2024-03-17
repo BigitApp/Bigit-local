@@ -1,40 +1,50 @@
-from bigdl.llm.transformers import AutoModel
-from transformers import AutoTokenizer
-import torch
+import argparse
 
-# 加载模型和分词器
-model_path = "/home/aowang/chat-llamaindex/backend/llms/chatglm-6b"
-model = AutoModel.from_pretrained(model_path, load_in_4bit=True, trust_remote_code=True)
-tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+from bigdl.llm.langchain.llms import *
+from langchain import PromptTemplate, LLMChain
+from langchain.callbacks.manager import CallbackManager
+from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 
-# 多轮对话的上下文管理
-context = ""
-while True:
-    # 获取用户输入
-    prompt = input("你想问AI什么？\n> ")
 
-    # 如果用户输入退出，结束循环
-    if prompt.lower() == '退出':
-        print("感谢与AI对话，再见！")
-        break
+def main():
+    
+    question = '你是谁'
+    model_path = "/home/aowang/Bigit-local/backend/llms/chatglm-6b-low/bigdl_llm_chatglm_q4_0.bin"
+    model_family = 'chatglm'
+    n_threads = 2
+    template ="""{question}"""
 
-    # 更新上下文
-    context += prompt + "\n"
+    prompt = PromptTemplate(template=template, input_variables=["question"])
 
-    # 格式化提示模板
-    CHATGLM_V2_PROMPT_TEMPLATE = "问：{}\n\n答：".format(context)
+    # Callbacks support token-wise streaming
+    callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
 
-    # 使用分词器编码输入
-    input_ids = tokenizer.encode(CHATGLM_V2_PROMPT_TEMPLATE.format(prompt=prompt), return_tensors="pt")
+    model_family_to_llm = {
+        "llama": LlamaLLM,
+        "gptneox": GptneoxLLM,
+        "bloom": BloomLLM,
+        "starcoder": StarcoderLLM,
+        "chatglm": ChatGLMLLM
+    }
 
-    # 使用模型生成答案
-    with torch.inference_mode():
-        output = model.generate(input_ids, max_new_tokens=512)
+    if model_family in model_family_to_llm:
+        langchain_llm = model_family_to_llm[model_family]
+    else:
+        raise ValueError(f"Unknown model family: {model_family}")
+    
+    llm = langchain_llm(
+        model_path=model_path,
+        n_threads=n_threads,
+        callback_manager=callback_manager, 
+        verbose=True
+    )
 
-    # 解码输出并打印
-    output_str = tokenizer.decode(output[0], skip_special_tokens=True)
-    print('-' * 20, 'AI的回答', '-' * 20)
-    print(output_str)
+    llm_chain = LLMChain(prompt=prompt, llm=llm)
 
-    # 清空上下文以开始新的对话
-    context = ""
+    llm_chain.run(question)
+
+
+if __name__ == '__main__':
+
+    
+    main()
