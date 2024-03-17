@@ -61,7 +61,7 @@ export interface ChatOptions {
 }
 
 // const CHAT_PATH = "/api/llm";
-const CHAT_PATH = "http://localhost:8000/api/chat";
+const CHAT_PATH = "http://192.168.125.128:8000/api/chat/api/chat";
 
 export function isVisionModel(model: ModelType) {
   return model === "gpt-4-vision-preview";
@@ -69,7 +69,6 @@ export function isVisionModel(model: ModelType) {
 
 export class LLMApi {
   async chat(options: ChatOptions) {
-    // request data
     const requestPayload = {
       message: options.message,
       chatHistory: options.chatHistory.map((m) => ({
@@ -83,62 +82,39 @@ export class LLMApi {
 
     console.log("[Request] payload: ", requestPayload);
 
-    const requestTimeoutId = setTimeout(
-      () => options.controller?.abort(),
-      REQUEST_TIMEOUT_MS,
-    );
+    const controller = new AbortController();
+    const signal = controller.signal;
+    options.controller = controller;
 
-    options.controller.signal.onabort = () => options.onFinish();
-    const handleError = (e: any) => {
-      clearTimeout(requestTimeoutId);
-      console.log("[Request] failed to make a chat request", e);
-      options.onError?.(e as Error);
+    const fetchOptions = {
+      method: 'POST',
+      body: JSON.stringify(requestPayload),
+      signal: signal,
+      headers: {
+        "Content-Type": "application/json",
+      },
     };
 
-    try {
-      const chatPayload = {
-        method: "POST",
-        body: JSON.stringify(requestPayload),
-        signal: options.controller?.signal,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      };
+    console.log("[Request] making chat request to: ", CHAT_PATH);
 
-      let llmResponse = "";
-      await fetchEventSource(CHAT_PATH, {
-        ...chatPayload,
-        async onopen(res) {
-          clearTimeout(requestTimeoutId);
-          if (!res.ok) {
-            const json = await res.json();
-            handleError(new Error(json.message));
-          }
-        },
-        onmessage(msg) {
-          try {
-            const json = JSON.parse(msg.data);
-            if (json.done) {
-              options.onFinish(json.memoryMessage);
-            } else if (json.error) {
-              options.onError?.(new Error(json.error));
-            } else {
-              // received a new token
-              llmResponse += json;
-              options.onUpdate(llmResponse);
-            }
-          } catch (e) {
-            console.error("[Request] error parsing streaming delta", msg);
-          }
-        },
-        onclose() {
-          options.onFinish();
-        },
-        onerror: handleError,
-        openWhenHidden: true,
-      });
+    try {
+      const response = await fetch(CHAT_PATH, fetchOptions);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("[Response] data: ", data);
+
+      const answerArray = data;
+      const responseMessage: ResponseMessage = {
+        role: "assistant", 
+        content: answerArray[0],
+      };
+      options.onFinish(responseMessage);
+      console.log('----------',responseMessage)
     } catch (e) {
-      handleError(e);
+      console.error("[Request] failed to make a chat request", e);
     }
   }
 }

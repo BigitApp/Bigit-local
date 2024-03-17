@@ -89,7 +89,7 @@ async def chat(request: Request, data: _ChatData):
     # query chat engine
     # chat_engine = SimpleChatEngine.from_defaults()
     chat_engine = index.as_chat_engine()
-    response = chat_engine.achat(data.message, messages)
+    response = chat_engine.s(data.message, messages)
 
     # stream response
     async def event_generator():
