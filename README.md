@@ -32,11 +32,11 @@
 2. **Set Up the Environment**
    - Install dependencies with Poetry:
      ```bash
-     poetry install
+     conda create --name bigit --file requirements.txt
      ```
    - Activate the Poetry shell:
      ```bash
-     poetry shell
+     conda activate bigit
      ```
    - Install additional packages for BigDL LLM with pip:
      ```bash
